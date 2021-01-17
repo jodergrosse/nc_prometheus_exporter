@@ -1,12 +1,14 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #[macro_use] extern crate rocket;
 
+use rocket::config::{Config, Environment, LoggingLevel};
+
 use confy;
 use serde_json;
 use serde_json::Value;
-use std::env::current_exe;
+use std::env;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::io::prelude::*;
 use log::{error, debug, warn};
 use std::str::FromStr;
@@ -21,13 +23,15 @@ mod lib;
 fn main() {
     setup_logger().expect("Logger setup.");
 
-    let mut cfg_path = current_exe().unwrap();
-    cfg_path.pop();
-    cfg_path = cfg_path.join("nc_prometheus_exporter.conf");
+    let path = match env::var("NCE_CONF") {
+        Ok(path_str) => path_str,
+        Err(_err) => "/etc/ncexporter/nc_prometheus_exporter.conf".to_string()
+    };
+    let cfg_path = Path::new(&path);
+
     if !cfg_path.exists() {
         panic!("No config found in {:?}.\nNextcloud credentials are required for the exporter to work.", cfg_path);
     }
-    let path = cfg_path.as_path().display().to_string();
 
     let cfg: Result<lib::Config, confy::ConfyError> = confy::load_path(cfg_path);
     let config = match cfg {
@@ -39,7 +43,7 @@ fn main() {
                 warn!("Nextcloud status page URL config ist empty.");
             }
             if config.nc_password.is_empty() || config.nc_user.is_empty() || config.nc_url.is_empty(){
-                warn!("Consider updating the configuration ({}).", path);
+                warn!("Consider updating the configuration ({:?}).", cfg_path);
             }
             config
         },
@@ -50,10 +54,21 @@ fn main() {
     };
     debug!("Config loaded {}", config);
 
-    let replace_config = load_replace_config(&config.nc_replacement_config);
+    let replace_config = load_replace_config(&config.nc_replacement_config, &cfg_path.display().to_string());
     debug!("Replace config loaded {}", replace_config);
 
-    rocket::ignite()
+    let port = match env::var("NCE_PORT") {
+        Ok(port_str) => port_str.parse().expect("Couldn't parse the value of 'NCE_PORT'"),
+        Err(_err) => 8000u16
+    };
+
+    let rocket_conf = Config::build(Environment::Production)
+        .address("127.0.0.1")
+        .port(port)
+        .log_level(LoggingLevel::Critical)
+        .finalize().unwrap();
+
+    rocket::custom(rocket_conf)
         .manage(config)
         .manage(replace_config)
         .manage(lib::RequestCounter::new())
@@ -62,11 +77,11 @@ fn main() {
 }
 
 
-fn load_replace_config(file_path: &str) -> Value {
+fn load_replace_config(file_path: &str, config_path: &str) -> Value {
     // loading replace config if in config
     let mut rep_cfg_path = PathBuf::from(file_path);
     if rep_cfg_path.is_relative() {
-        rep_cfg_path = current_exe().unwrap();
+        rep_cfg_path = PathBuf::from_str(config_path).unwrap();
         rep_cfg_path.pop();
         rep_cfg_path = rep_cfg_path.join(file_path);
     }
