@@ -62,10 +62,13 @@ each entry is processed by the exporter.
 The xml node names will be combined into a prometheus time series name.
 
 Numeric values will be used as prometheus metric. Non numeric values
-will be replaced with a numeric value if configured.
+will be replaced with a numeric value if configured, or otherwise
+dropped.
 
 Additional to nextcloud metrics a few metrics regarding the export will be
 added.
+
+### Additional exporter metrics
 
 | name                         | description |
 |:-----------------------------|:------------|
