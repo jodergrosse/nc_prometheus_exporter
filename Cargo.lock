@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "nc_prometheus_exporter"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "confy",
