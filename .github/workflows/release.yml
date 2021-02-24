@@ -1,0 +1,154 @@
+name: Create Release
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose --release
+
+    - name: Packing for Debian (folder structure)
+      run: |
+        mkdir nc-prometheus-exporter
+        mkdir nc-prometheus-exporter/DEBIAN
+        mkdir nc-prometheus-exporter/usr
+        mkdir nc-prometheus-exporter/usr/bin
+        mkdir nc-prometheus-exporter/etc
+        mkdir nc-prometheus-exporter/etc/nc-prometheus-exporter
+        mkdir nc-prometheus-exporter/etc/systemd
+        mkdir nc-prometheus-exporter/etc/systemd/system
+
+    - run: echo $GITHUB_REF | grep -o -P '\d+\.\d+\.\d+'
+
+    - name: Packing for Debian (conffiles file)
+      run: |
+        cat > nc-prometheus-exporter/DEBIAN/conffiles << ENDOFFILE
+        /etc/nc-prometheus-exporter/replacements.json
+        /etc/nc-prometheus-exporter/config
+        ENDOFFILE
+
+    - name: Packing for Debian (control file)
+      run: |
+        cat > nc-prometheus-exporter/DEBIAN/control << ENDOFFILE
+        Package: nc-prometheus-exporter
+        Version: $(echo $GITHUB_REF | grep -o -P '\d+\.\d+\.\d+' )
+        Section: custom
+        Priority: optional
+        Architecture: amd64
+        Essential: no
+        Installed-Size: $(stat -c %s target/release/nc_prometheus_exporter)
+        Maintainer: Johannes Groß <1848069+jodergrosse@users.noreply.github.com>
+        Description: A nextcloud prometheus exporter based on the nextcloud info api, whose output is transformed into a prometheus compatible format. Github: (https://github.com/jodergrosse/nc_prometheus_exporter).
+        ENDOFFILE
+
+    - name: Packing for Debian (preinst script)
+      run: |
+        cat > nc-prometheus-exporter/DEBIAN/preinst << ENDOFFILE
+        adduser --system nce_exporter
+        ENDOFFILE
+
+    - run: chmod 0755 nc-prometheus-exporter/DEBIAN/preinst
+
+    - name: Packing for Debian (executable)
+      run: cp target/release/nc_prometheus_exporter nc-prometheus-exporter/usr/bin/
+
+    - name: Packing for Debian (config)
+      run: |
+        cat > nc-prometheus-exporter/etc/nc-prometheus-exporter/config << ENDOFFILE
+        # nc_url = 'https://your.domain.tld/ocs/v2.php/apps/serverinfo/api/v1/info'
+        # nc_user = 'example_user'
+        # nc_password = 'example_pw'
+        nc_replacement_config = 'replacements.json'
+        ENDOFFILE
+
+    - name: Packing for Debian (replace config)
+      run: |
+        cat > nc-prometheus-exporter/etc/nc-prometheus-exporter/replacements.json << ENDOFFILE
+        {
+            "values" : {
+                "ok": 1,
+                "yes": 1,
+                "OK": 1,
+                "none": 0,
+                "no": 0
+            }
+        }
+        ENDOFFILE
+
+    - name: Packing for Debian (systemd service)
+      run: |
+        cat > nc-prometheus-exporter/etc/systemd/system/nc-prometheus-exporter.service << ENDOFFILE
+        [Install]
+        Alias=nc-prometheus-exporter
+
+        [Unit]
+        Description=A nextcloud prometheus exporter based on the nextcloud info api, whose output is transformed into a prometheus compatible format.
+
+        [Service]
+        Type=simple
+        ExecStart=/usr/bin/nc_prometheus_exporter
+        After=network.target
+        ENDOFFILE
+        User=ncp_exporter
+# Group=ncp_exporter / Group=nogroup?
+
+    - name: Packing for Debian (build package)
+      run: |
+        dpkg-deb --build nc-prometheus-exporter
+        mv nc-prometheus-exporter.deb nc-prometheus-exporter-$(echo $GITHUB_REF | grep -o -P '\d+\.\d+\.\d+')-amd64.deb
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - run: ls -la
+
+    - name: Upload Release Asset
+      id: upload-release-asset-executable
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: target/release/nc_prometheus_exporter
+        asset_name: nc-prometheus-exporter
+        asset_content_type: application/octet-stream
+
+    - name: prepare deb path
+      id: deb_path
+      run: |
+        VERSION=$(echo $GITHUB_REF | grep -o -P '\d+\.\d+\.\d+')
+        PKG_FILE="nc-prometheus-exporter-$VERSION-amd64.deb"
+        echo ::set-output name=DEB_FILE::$PKG_FILE
+
+    - name: Upload Release Asset
+      id: upload-release-asset-deb
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: ${{ steps.deb_path.outputs.DEB_FILE }}
+        asset_name: ${{ steps.deb_path.outputs.DEB_FILE }}
+        asset_content_type: application/octet-stream
