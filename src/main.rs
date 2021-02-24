@@ -25,7 +25,7 @@ fn main() {
 
     let path = match env::var("NCE_CONF") {
         Ok(path_str) => path_str,
-        Err(_err) => "/etc/ncexporter/nc_prometheus_exporter.conf".to_string()
+        Err(_err) => "/etc/nc-prometheus-exporter/config".to_string()
     };
     let cfg_path = Path::new(&path);
 
