@@ -95,7 +95,7 @@ pub fn index(cfg: State<Config>, replace_cfg: State<Value>, req_counter: State<R
     
     req_counter.count_end();
     Some(format!(
-        "{}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{}\n{}",
+        "{}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{}\n{}\n{}",
         "# exporter duration",
         "rust_nce_parse_duration", dur_parse,
         "rust_nce_load_duration", dur_load,
@@ -103,6 +103,7 @@ pub fn index(cfg: State<Config>, replace_cfg: State<Value>, req_counter: State<R
         "rust_nce_request_start_count", req_counter.start.load(Ordering::Relaxed),
         "rust_nce_request_end_count", req_counter.end.load(Ordering::Relaxed),
         "# nextcloud metrics",
+        "ocs_meta_up 1",
         prom_str
     ))
 }
@@ -249,7 +250,7 @@ fn nc_metric_to_number(value: &str, replace_dict: &Value) -> Result<String, Stri
 /// Usually joins parts of the xml path with underscore
 /// If a replacement is defined
 fn xml_path_to_metric_name (path: &[String]) -> String {
-    let name = path.join("_");
+    let name = path.join("_").replace(".", "_");
     name
 }
 
