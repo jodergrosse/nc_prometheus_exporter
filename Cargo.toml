@@ -1,6 +1,6 @@
 [package]
 name = "nc_prometheus_exporter"
-version = "1.1.0"
+version = "1.1.1"
 authors = ["jo"]
 edition = "2018"
 
@@ -11,7 +11,7 @@ serde = { version = "*", features = ["derive"] }
 serde_derive = "*"
 serde_json = "*"
 confy = "*"
-reqwest = { version = "*", features = ["blocking", "rustls-tls"] }
+reqwest = { version = "*", features = ["blocking", "rustls-tls", "cookies"] }
 quick-xml = "*"
 rocket = "*"
 md5 = "*"
