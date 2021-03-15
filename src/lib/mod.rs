@@ -77,11 +77,12 @@ impl fmt::Display for Config {
 }
 
 #[get("/")]
-pub fn index(cfg: State<Config>, replace_cfg: State<Value>, req_counter: State<RequestCounter>) -> Option<String> {
+pub fn index(cfg: State<Config>, replace_cfg: State<Value>, req_counter: State<RequestCounter>, client: State<Client>) -> Option<String> {
     let timer = Instant::now();
     req_counter.count_start();
 
     let xml = match load_status_page(
+        &client,
         &cfg.nc_url, &cfg.nc_user, &cfg.nc_password
     ) {
         Some(text) => text,
@@ -109,8 +110,8 @@ pub fn index(cfg: State<Config>, replace_cfg: State<Value>, req_counter: State<R
 }
 
 /// Loads the nextcloud status page using nc admin user credentials
-pub fn load_status_page(url: &str, user: &str, password: &str) -> Option<String> {
-    let client = Client::new();
+pub fn load_status_page(client: &Client, url: &str, user: &str, password: &str) -> Option<String> {
+
     let response = client.get(url)
             .basic_auth(user, Some(password))
             .send();

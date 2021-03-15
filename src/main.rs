@@ -13,6 +13,8 @@ use std::io::prelude::*;
 use log::{error, debug, warn};
 use std::str::FromStr;
 use fern;
+use reqwest;
+use reqwest::blocking::Client;
 
 mod lib;
 
@@ -62,6 +64,11 @@ fn main() {
         Err(_err) => 8000u16
     };
 
+    let client = Client::builder()
+        .cookie_store(true)
+        .build().expect("Client couldn't be created.");
+    debug!("Client created");
+
     let rocket_conf = Config::build(Environment::Production)
         .address("127.0.0.1")
         .port(port)
@@ -72,6 +79,7 @@ fn main() {
         .manage(config)
         .manage(replace_config)
         .manage(lib::RequestCounter::new())
+        .manage(client)
         .mount("/", routes![lib::index])
         .launch();
 }
